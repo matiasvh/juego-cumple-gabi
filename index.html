@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1040">
+<title>🎉 El Juego de Gabi</title>
+<style>
+  :root{
+    --bg1:#1a1040; --bg2:#3b1d5e; --bg3:#54246b;
+    --card:#ffffff14; --line:#ffffff26;
+    --accent:#ffce3a; --pink:#ff5d8f; --teal:#3ddad7; --text:#fdfaff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{min-height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    background:linear-gradient(165deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
+    background-attachment:fixed;
+    color:var(--text);
+    padding:26px 16px calc(40px + env(safe-area-inset-bottom));
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:500px;margin:0 auto}
+
+  header{text-align:center;margin-bottom:20px}
+  header h1{font-size:1.85rem;line-height:1.2;letter-spacing:.3px}
+  header .sub{color:var(--teal);font-weight:700;margin-top:6px;font-size:.95rem;letter-spacing:.5px}
+
+  .rules{
+    background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:16px 16px 14px;margin-bottom:20px;font-size:.92rem;line-height:1.6;
+  }
+  .rules b{color:var(--accent)}
+  .loud{
+    display:block;text-align:center;background:var(--accent);color:#1a1040;
+    font-weight:900;border-radius:12px;padding:11px 8px;margin-top:14px;
+    font-size:1rem;letter-spacing:.5px;box-shadow:0 6px 18px #ffce3a33;
+  }
+
+  h2.turnos{
+    font-size:.8rem;text-transform:uppercase;letter-spacing:2.5px;
+    color:var(--teal);margin:0 0 12px;text-align:center;font-weight:800;
+  }
+  .progreso{text-align:center;font-size:.78rem;color:#ffffff88;margin-bottom:14px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .guest{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:13px 8px;text-align:center;cursor:pointer;user-select:none;
+    transition:transform .12s ease,background .18s ease;position:relative;overflow:hidden;
+  }
+  .guest:active{transform:scale(.96)}
+  .guest .turno{
+    display:block;font-size:.62rem;letter-spacing:1.6px;font-weight:800;
+    color:var(--teal);text-transform:uppercase;margin-bottom:5px;
+  }
+  .guest .nombre{display:block;font-size:1.06rem;font-weight:800}
+  .guest.hecho{opacity:.42;background:#ffffff0a}
+  .guest.hecho::after{
+    content:"✅";position:absolute;top:6px;right:8px;font-size:.85rem;opacity:.95;
+  }
+  .guest.final{
+    grid-column:1 / -1;border:1px solid var(--accent);background:#ffce3a1a;
+  }
+  .guest.final .turno{color:var(--accent)}
+  .guest.locked{opacity:.55}
+  .guest.locked .nombre::after{content:" 🔒"}
+
+  .modal-bg{
+    position:fixed;inset:0;background:#0b0620d9;backdrop-filter:blur(4px);
+    display:none;align-items:center;justify-content:center;padding:18px;z-index:50;
+  }
+  .modal-bg.open{display:flex}
+  .modal{
+    background:linear-gradient(165deg,#2a1550,#3d1f63);
+    border:1px solid var(--line);border-radius:22px;padding:22px 18px 18px;
+    width:100%;max-width:430px;max-height:88vh;overflow-y:auto;
+    box-shadow:0 24px 60px #00000080;
+  }
+  .modal h3{font-size:1.25rem;margin-bottom:10px;line-height:1.3}
+  .modal p.msg{font-size:.95rem;line-height:1.55;color:#ffffffdc;margin-bottom:18px}
+
+  .tag{
+    display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:1.2px;
+    text-transform:uppercase;padding:5px 9px;border-radius:8px;margin-bottom:9px;
+  }
+  .qcard{
+    background:var(--accent);color:#1a1040;border-radius:16px;padding:15px;margin-bottom:14px;
+  }
+  .qcard .tag{background:#1a104022;color:#1a1040}
+  .qcard .txt{font-size:1.14rem;font-weight:800;line-height:1.35}
+  .acard{
+    background:var(--pink);color:#2a0716;border-radius:16px;padding:15px;margin-bottom:14px;
+  }
+  .acard .tag{background:#2a071622;color:#2a0716}
+  .acard .txt{font-size:1.05rem;font-weight:700;line-height:1.4}
+
+  .btn{
+    display:block;width:100%;border:0;border-radius:14px;padding:14px;
+    font-size:1rem;font-weight:800;cursor:pointer;margin-top:10px;
+    font-family:inherit;transition:transform .1s ease;
+  }
+  .btn:active{transform:scale(.98)}
+  .btn.pri{background:var(--teal);color:#062a2a}
+  .btn.pink{background:var(--pink);color:#fff}
+  .btn.ok{background:#3ddb7e;color:#06301b}
+  .btn.ghost{background:#ffffff14;color:#ffffffcc;border:1px solid var(--line)}
+  .btn.link{background:none;color:#ffffff7a;font-size:.85rem;font-weight:600;padding:10px;text-decoration:underline}
+
+  .hidden{display:none}
+
+  footer{text-align:center;margin-top:30px}
+  footer button{
+    background:none;border:0;color:#ffffff55;font-size:.78rem;
+    text-decoration:underline;cursor:pointer;font-family:inherit;padding:8px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎉 El Juego de Gabi</h1>
+    <div class="sub">Bar Taperas · 19:45</div>
+  </header>
+
+  <div class="rules">
+    <b>Cómo se juega:</b> Gabi decide a quién le toca (Martín al final sí), cada invitado abre su propia carta cuando le toca el turno. Respondes la pregunta sobre Gabi y ella decide si está correcto. Si fallas (o prefieres no responder) te toca la acción, aunque también puedes hacer ambas.
+    <span class="loud">📢 LEE TU CARTA EN VOZ ALTA</span>
+  </div>
+
+  <h2 class="turnos">Los 17 turnos</h2>
+  <div class="progreso" id="progreso"></div>
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <button id="reset">reiniciar juego</button>
+  </footer>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var INVITADOS = [
+    {n:"Matías", q:"¿Cuál es la comida que Gabi no come ni por apuesta?", a:"Haz un brindis improvisado por Gabi de 30 segundos, sin muletillas."},
+    {n:"Liz", q:"¿Qué le da un miedo irracional a Gabi?", a:"Sé la fotógrafa oficial de la mesa por los próximos 15 minutos."},
+    {n:"Joaquín", q:"¿Qué app abre Gabi apenas despierta?", a:"Deja que Gabi publique un estado en tu WhatsApp, sin verlo antes."},
+    {n:"Lea", q:"¿Cuál es el emoji que Gabi más usa?", a:"Sostén contacto visual con Gabi 10 segundos mientras toda la mesa cuenta en voz alta."},
+    {n:"Bastián", q:"¿Qué idioma le gustaría hablar a Gabi?", a:"Muestra la última foto de tu galería y explícala."},
+    {n:"Javier", q:"¿Cuál es el país que Gabi ya visitó y volvería mil veces?", a:"Deja tu celular boca abajo al centro de la mesa hasta tu próximo turno; si lo tomas antes, castigo doble."},
+    {n:"Diego", q:"¿Cuántos años cumple Gabi exactamente?", a:"Dibuja la celebración de esta noche en el momento y entrégale el dibujo a Gabi como regalo en el próximo turno."},
+    {n:"Camila", q:"¿Qué siempre lleva Gabi en la cartera/mochila sí o sí?", a:"Cuéntale a la mesa qué creías de Gabi antes de conocerla y qué opinas ahora."},
+    {n:"Dee", q:"¿Qué cosa de Chile extrañaría más Gabi si viviera afuera?", a:"Inventa y ejecuta un saludo secreto con Gabi de al menos 3 movimientos."},
+    {n:"Caro", q:"¿Cuál es la costumbre más rara de Gabi en su casa?", a:"Deja que la mesa elija entre todos tu próximo pedido (comida o bebida) y acátalo."},
+    {n:"Seba", q:"¿Qué destino tiene Gabi pendiente hace años y aún no concreta?", a:"Dirige un aplauso de toda la mesa para Gabi."},
+    {n:"Pia", q:"¿Qué le traerías a Gabriela desde Alemania que ella extraña?", a:"Adivina qué hay en el banano de Gabi: nombra 5 cosas, necesitas 3 aciertos."},
+    {n:"Ferni", q:"¿Cuál es el pasatiempo o hobby más reciente de Gabi?", a:"Deja que Gabi elija a quién de la mesa debes darle un abrazo de 10 segundos."},
+    {n:"Arno", q:"¿Qué costumbre extraña tenía Gabi cuando vivían en la Casa Chancho?", a:"Inventa el cóctel «Gabi»: escribe en una servilleta sus ingredientes y por qué la representan, y entrégaselo en el próximo turno."},
+    {n:"Tuto", q:"¿En qué ciudad o comuna nació Gabi?", a:"Dibuja a Gabi en una servilleta en 60 segundos y regálaselo firmado."},
+    {n:"Magdalena", q:"¿Cuál fue la etapa o «era» más icónica de Gabi (la deportista, la hippie...)?", a:"Deja que Gabi elija una foto tuya de tu galería y cuéntale la historia a la mesa."},
+    {n:"Martin", q:"¿Qué antojo dulce crees que más le gusta a Gabi en un día de lluvia?", a:"Cierra el juego: haz el brindis final oficial por Gabi, de pie."}
+  ];
+
+  var LAST = INVITADOS.length - 1;      // índice de Martin
+  var KEY = "juegoGabi.v1";
+
+  var grid = document.getElementById("grid");
+  var progreso = document.getElementById("progreso");
+  var modalBg = document.getElementById("modalBg");
+  var modal = document.getElementById("modal");
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch(e){ return []; }
+  }
+  function save(arr){
+    try{ localStorage.setItem(KEY, JSON.stringify(arr)); }catch(e){}
+  }
+
+  var hechos = load();
+
+  function esta(i){ return hechos.indexOf(i) !== -1; }
+  function marcar(i){
+    if(!esta(i)){ hechos.push(i); save(hechos); }
+  }
+  function otrosListos(){
+    for(var i=0;i<LAST;i++){ if(!esta(i)) return false; }
+    return true;
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function render(){
+    grid.innerHTML = "";
+    INVITADOS.forEach(function(inv, i){
+      var el = document.createElement("div");
+      var final = (i === LAST);
+      var cls = "guest";
+      if(final) cls += " final";
+      if(esta(i)) cls += " hecho";
+      if(final && !esta(i) && !otrosListos()) cls += " locked";
+      el.className = cls;
+      el.innerHTML =
+        '<span class="turno">' + (final ? "Gran cierre 🔒" : "Turno " + (i+1)) + '</span>' +
+        '<span class="nombre">' + esc(inv.n) + '</span>';
+      el.addEventListener("click", function(){ tocar(i); });
+      grid.appendChild(el);
+    });
+    var n = 0;
+    for(var i=0;i<INVITADOS.length;i++){ if(esta(i)) n++; }
+    progreso.textContent = n + " de " + INVITADOS.length + " turnos cumplidos";
+  }
+
+  function abrirModal(html){
+    modal.innerHTML = html;
+    modalBg.classList.add("open");
+    modal.scrollTop = 0;
+  }
+  function cerrarModal(){
+    modalBg.classList.remove("open");
+    modal.innerHTML = "";
+  }
+  modalBg.addEventListener("click", function(e){
+    if(e.target === modalBg) cerrarModal();
+  });
+
+  function on(id, fn){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener("click", fn);
+  }
+
+  function tocar(i){
+    if(i === LAST && !esta(LAST) && !otrosListos()){ modalBloqueo(); return; }
+    modalConfirmar(i);
+  }
+
+  function modalBloqueo(){
+    abrirModal(
+      '<h3>🔒 Carta bloqueada</h3>' +
+      '<p class="msg">La carta de Martin cierra el juego: se desbloquea cuando todos los demás hayan cumplido su turno.</p>' +
+      '<button class="btn pri" id="mCerrar">Entendido</button>' +
+      '<button class="btn ghost" id="mConfiar">Ya jugaron todos en la mesa → desbloquear</button>'
+    );
+    on("mCerrar", cerrarModal);
+    on("mConfiar", function(){
+      abrirModal(
+        '<h3>¿Seguro?</h3>' +
+        '<p class="msg">¿Seguro que todos ya cumplieron su turno? Gabi es testigo 👀</p>' +
+        '<button class="btn ok" id="mSi">Sí, desbloquear</button>' +
+        '<button class="btn ghost" id="mNo">Mejor no</button>'
+      );
+      on("mSi", function(){
+        for(var k=0;k<LAST;k++) marcar(k);
+        render();
+        modalConfirmar(LAST);
+      });
+      on("mNo", modalBloqueo);
+    });
+  }
+
+  function modalConfirmar(i){
+    var inv = INVITADOS[i];
+    abrirModal(
+      '<h3>¿Eres ' + esc(inv.n) + ' y es tu turno?</h3>' +
+      '<p class="msg">Solo abre tu propia carta 👀</p>' +
+      '<button class="btn pri" id="mSi">Sí, abrir mi carta</button>' +
+      '<button class="btn ghost" id="mNo">No, cerrar</button>'
+    );
+    on("mSi", function(){ modalCarta(i); });
+    on("mNo", cerrarModal);
+  }
+
+  function modalCarta(i){
+    var inv = INVITADOS[i];
+    abrirModal(
+      '<h3>' + esc(inv.n) + (i === LAST ? ' · Gran cierre' : ' · Turno ' + (i+1)) + '</h3>' +
+      '<div class="qcard">' +
+        '<span class="tag">🧠 Pregunta — léela en voz alta</span>' +
+        '<div class="txt">' + esc(inv.q) + '</div>' +
+      '</div>' +
+      '<div class="acard hidden" id="accion">' +
+        '<span class="tag">🎭 Acción — hazla ahora</span>' +
+        '<div class="txt">' + esc(inv.a) + '</div>' +
+      '</div>' +
+      '<button class="btn pink" id="mAccion">Fallé / Prefiero la acción 🎭</button>' +
+      '<button class="btn ok" id="mHecho">✅ Turno cumplido</button>' +
+      '<button class="btn link" id="mSalir">cerrar sin marcar</button>'
+    );
+    on("mAccion", function(){
+      document.getElementById("accion").classList.remove("hidden");
+      document.getElementById("mAccion").classList.add("hidden");
+    });
+    on("mHecho", function(){
+      marcar(i);
+      render();
+      cerrarModal();
+    });
+    on("mSalir", cerrarModal);
+  }
+
+  document.getElementById("reset").addEventListener("click", function(){
+    if(confirm("¿Reiniciar el juego en este celular? Se borran los turnos marcados.")){
+      hechos = [];
+      try{ localStorage.removeItem(KEY); }catch(e){}
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
