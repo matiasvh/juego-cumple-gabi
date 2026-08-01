@@ -42,7 +42,18 @@
     font-size:.8rem;text-transform:uppercase;letter-spacing:2.5px;
     color:var(--teal);margin:0 0 12px;text-align:center;font-weight:800;
   }
-  .progreso{text-align:center;font-size:.78rem;color:#ffffff88;margin-bottom:14px}
+  .progreso{text-align:center;font-size:.78rem;color:#ffffff88;margin-bottom:6px}
+  .sync{
+    text-align:center;font-size:.7rem;color:#ffffff66;margin-bottom:14px;
+    letter-spacing:.3px;min-height:1em;
+  }
+  .sync .dot{
+    display:inline-block;width:7px;height:7px;border-radius:50%;
+    margin-right:5px;vertical-align:middle;background:#ffffff44;
+  }
+  .sync.ok .dot{background:#3ddb7e;box-shadow:0 0 7px #3ddb7e99}
+  .sync.wait .dot{background:var(--accent)}
+  .sync.off .dot{background:#ff7a7a}
 
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   .guest{
@@ -131,6 +142,7 @@
 
   <h2 class="turnos">Los 17 turnos</h2>
   <div class="progreso" id="progreso"></div>
+  <div class="sync" id="sync"></div>
   <div class="grid" id="grid"></div>
 
   <footer>
@@ -167,37 +179,171 @@
   ];
 
   var LAST = INVITADOS.length - 1;      // índice de Martin
-  var KEY = "juegoGabi.v1";
+  var KEY = "juegoGabi.v2";
+
+  // URL de la Realtime Database de Firebase, terminada en .json
+  // Vacía => el juego funciona igual pero solo con estado local.
+  var SYNC_URL = "https://juego-cumple-1c083-default-rtdb.europe-west1.firebasedatabase.app/estado.json";
 
   var grid = document.getElementById("grid");
   var progreso = document.getElementById("progreso");
+  var syncEl = document.getElementById("sync");
   var modalBg = document.getElementById("modalBg");
   var modal = document.getElementById("modal");
 
+  // ---- Estado ----
+  // {e: época de reinicio, h: [índices cumplidos]}
+  // Los turnos solo se agregan, nunca se quitan: al fusionar dos celulares
+  // basta con unir sus listas. Un reinicio sube la época y esa gana sobre
+  // cualquier estado viejo que llegue después.
+
+  function vacio(){ return {e:0, h:[]}; }
+
+  function normalizar(o){
+    if(!o || typeof o !== "object") return null;
+    var ep = typeof o.e === "number" ? o.e : 0;
+    // Firebase borra los arreglos vacíos y convierte los dispersos en objetos
+    // con claves numéricas, así que aceptamos las tres formas.
+    var lista;
+    if(Array.isArray(o.h)) lista = o.h;
+    else if(o.h == null) lista = [];
+    else if(typeof o.h === "object") lista = Object.keys(o.h).map(function(k){ return o.h[k]; });
+    else return null;
+    var vistos = {}, out = [];
+    lista.forEach(function(i){
+      i = parseInt(i, 10);
+      if(i >= 0 && i < INVITADOS.length && !vistos[i]){ vistos[i] = 1; out.push(i); }
+    });
+    out.sort(function(a,b){ return a-b; });
+    return {e:ep, h:out};
+  }
+
   function load(){
     try{
-      var raw = localStorage.getItem(KEY);
-      var arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    }catch(e){ return []; }
+      var o = normalizar(JSON.parse(localStorage.getItem(KEY)));
+      if(o) return o;
+      var viejo = JSON.parse(localStorage.getItem("juegoGabi.v1"));   // formato anterior
+      if(Array.isArray(viejo)) return normalizar({e:0, h:viejo}) || vacio();
+    }catch(e){}
+    return vacio();
   }
-  function save(arr){
-    try{ localStorage.setItem(KEY, JSON.stringify(arr)); }catch(e){}
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(estado)); }catch(e){}
   }
 
-  var hechos = load();
+  var estado = load();
 
-  function esta(i){ return hechos.indexOf(i) !== -1; }
-  function marcar(i){
-    if(!esta(i)){ hechos.push(i); save(hechos); }
+  function fusionar(a, b){
+    if(!b) return a;
+    if(b.e > a.e) return {e:b.e, h:b.h.slice()};   // reinicio más nuevo manda
+    if(a.e > b.e) return a;
+    return normalizar({e:a.e, h:a.h.concat(b.h)});
   }
+  function igual(a, b){
+    return !!b && a.e === b.e && a.h.join(",") === b.h.join(",");
+  }
+
+  function esta(i){ return estado.h.indexOf(i) !== -1; }
+  function marcar(i){ if(!esta(i)) estado.h.push(i); }
   function otrosListos(){
     for(var i=0;i<LAST;i++){ if(!esta(i)) return false; }
     return true;
   }
 
+  // Guarda, dibuja y propaga al resto de los celulares.
+  function commit(){
+    estado = normalizar(estado);
+    save();
+    render();
+    subir();
+  }
+
   function esc(s){
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  // ---- Sincronización ----
+
+  var pendiente = false;   // hay cambios locales sin confirmar en el servidor
+
+  function estadoSync(clase, texto){
+    syncEl.className = "sync " + clase;
+    syncEl.innerHTML = '<span class="dot"></span>' + texto;
+  }
+
+  function subir(){
+    if(!SYNC_URL) return;
+    pendiente = true;
+    fetch(SYNC_URL, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(estado)
+    }).then(function(r){
+      if(!r.ok) throw new Error(r.status);
+      pendiente = false;
+      estadoSync("ok", "sincronizado con los demás celulares");
+    }).catch(function(){
+      estadoSync("off", "sin conexión · guardado en este celular");
+    });
+  }
+
+  function recibir(remoto){
+    remoto = normalizar(remoto);
+    if(!remoto){ if(estado.h.length || estado.e) subir(); return; }
+    var m = fusionar(estado, remoto);
+    if(!igual(m, estado)){ estado = m; save(); render(); }
+    if(!igual(m, remoto)) subir();          // teníamos turnos que el servidor no
+    else { pendiente = false; estadoSync("ok", "sincronizado con los demás celulares"); }
+  }
+
+  function bajar(){
+    if(!SYNC_URL) return;
+    fetch(SYNC_URL, {cache: "no-store"})
+      .then(function(r){ return r.json(); })
+      .then(recibir)
+      .catch(function(){
+        estadoSync("off", "sin conexión · guardado en este celular");
+      });
+  }
+
+  function sondear(){
+    setInterval(bajar, 5000);
+  }
+
+  function conectar(){
+    if(!SYNC_URL){ syncEl.style.display = "none"; return; }
+    estadoSync("wait", "conectando…");
+    bajar();
+
+    if(!window.EventSource){ sondear(); return; }
+
+    var es;
+    try{ es = new EventSource(SYNC_URL); }
+    catch(e){ sondear(); return; }
+
+    function onEvento(ev){
+      try{
+        var d = JSON.parse(ev.data);
+        // Siempre escribimos el objeto completo en la raíz; si llega un
+        // cambio parcial, releemos todo para no quedar a medias.
+        if(d && d.path === "/") recibir(d.data);
+        else bajar();
+      }catch(e){}
+    }
+    es.addEventListener("put", onEvento);
+    es.addEventListener("patch", onEvento);
+    es.onopen = function(){
+      if(pendiente) subir();
+      else estadoSync("ok", "sincronizado con los demás celulares");
+    };
+    es.onerror = function(){
+      estadoSync("off", "reconectando…");
+    };
+
+    // Red intermitente en el bar: al volver la señal, reintentar de una.
+    window.addEventListener("online", function(){ bajar(); if(pendiente) subir(); });
+    // Respaldo lento por si el stream queda colgado sin avisar.
+    setInterval(function(){ if(pendiente) subir(); }, 15000);
   }
 
   function render(){
@@ -261,7 +407,7 @@
       );
       on("mSi", function(){
         for(var k=0;k<LAST;k++) marcar(k);
-        render();
+        commit();
         modalConfirmar(LAST);
       });
       on("mNo", modalBloqueo);
@@ -302,21 +448,24 @@
     });
     on("mHecho", function(){
       marcar(i);
-      render();
+      commit();
       cerrarModal();
     });
     on("mSalir", cerrarModal);
   }
 
   document.getElementById("reset").addEventListener("click", function(){
-    if(confirm("¿Reiniciar el juego en este celular? Se borran los turnos marcados.")){
-      hechos = [];
-      try{ localStorage.removeItem(KEY); }catch(e){}
-      render();
+    var aviso = SYNC_URL
+      ? "¿Reiniciar el juego para TODOS los celulares? Se borran los turnos marcados."
+      : "¿Reiniciar el juego en este celular? Se borran los turnos marcados.";
+    if(confirm(aviso)){
+      estado = {e: estado.e + 1, h: []};   // época nueva: gana sobre los estados viejos
+      commit();
     }
   });
 
   render();
+  conectar();
 })();
 </script>
 </body>
